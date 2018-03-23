@@ -1,0 +1,54 @@
+#
+# Inception-V4 Network Components
+# Details are in https://arxiv.org/pdf/1602.07261v2.pdf
+#
+
+InceptionV4_CIFAR10_Model(input, labelDim, bnTimeConst) =
+{
+    # Note: Simplified the Stem and reduced the channels
+    # 32 x 32 x 3
+    conv1 = Sequential (
+        ConvBNReLULayer {16, (3:3), (1:1), true, bnTimeConst} :
+        ConvBNReLULayer {32, (3:3), (1:1), true, bnTimeConst} :
+        ConvBNReLULayer {64, (3:3), (1:1), true, bnTimeConst}
+    ) (input)
+    # 32 x 32 x 64
+    conv2_3x3 = ConvBNReLULayer {64, (3:3), (1:1), true, bnTimeConst} (conv1)
+    conv2_1x1 = ConvBNReLULayer {64, (3:3), (1:1), true, bnTimeConst} (conv1)
+    conv_stem = Splice ((conv2_3x3:conv2_1x1), axis=3)
+
+    # Inception Blocks
+    # 32 x 32 x 128
+    inception4a = Sequential (
+        InceptionA {16, 32, 32, 16, 32, 32, 32, bnTimeConst} :
+        InceptionA {16, 32, 32, 16, 32, 32, 32, bnTimeConst} :
+        InceptionA {16, 32, 32, 16, 32, 32, 32, bnTimeConst} :
+        InceptionA {16, 32, 32, 16, 32, 32, 32, bnTimeConst}
+    ) (conv_stem)
+    reductiona = ReductionA{16, 32, 64, 64, true, bnTimeConst} (inception2a)
+    # 16 x 16 x 256
+    inception7b = Sequential (
+        InceptionB {16, 16, 32, 32, 64, 16, 32, 64, 64, 64, bnTimeConst} :
+        InceptionB {16, 16, 32, 32, 64, 16, 32, 64, 64, 64, bnTimeConst} :
+        InceptionB {16, 16, 32, 32, 64, 16, 32, 64, 64, 64, bnTimeConst} :
+        InceptionB {16, 16, 32, 32, 64, 16, 32, 64, 64, 64, bnTimeConst} :
+        InceptionB {16, 16, 32, 32, 64, 16, 32, 64, 64, 64, bnTimeConst} :
+        InceptionB {16, 16, 32, 32, 64, 16, 32, 64, 64, 64, bnTimeConst} :
+        InceptionB {16, 16, 32, 32, 64, 16, 32, 64, 64, 64, bnTimeConst}
+    ) (reductiona)
+    reductionb = ReductionB{64, 64, 64, 64, 64, 64, 128, true, bnTimeConst} (inception3b)
+
+    # 8 x 8 x 512
+    inception3c = Sequential (
+        InceptionC {128, 228, 256, 128, 228, 64, 64, 64, bnTimeConst} :
+        InceptionC {128, 228, 256, 128, 228, 64, 64, 64, bnTimeConst} :
+        InceptionC {128, 228, 256, 128, 228, 64, 64, 64, bnTimeConst}
+    ) (reductionb)
+
+    # Global Average
+    # 8 x 8 x 512
+    avg_pool = AveragePoolingLayer{(8:8)}(inceptionc)
+    # 1 x 1 x 512
+    drop = Dropout(avg_pool)
+    z = LinearLayer{labelDim, init = 'heNormal'}(drop)
+}

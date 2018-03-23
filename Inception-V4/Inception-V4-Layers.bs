@@ -1,0 +1,178 @@
+#
+# Inception-V4 Layer Details
+# Details are in https://arxiv.org/pdf/1602.07261v2.pdf
+#
+
+#
+# Convolution layer with Batch Normalization and Rectifier Linear activation.
+#
+
+ConvBNLayer {outChannels, kernel, stride, pad, bnTimeConst} = Sequential (
+    ConvolutionalLayer{outChannels, kernel, init = 'heNormal', stride = stride, pad = pad, bias = false} :
+    BatchNormalizationLayer{spatialRank = 2, normalizationTimeConstant = bnTimeConst}
+)
+
+ConvBNReLULayer {outChannels, kernel, stride, pad, bnTimeConst} = Sequential (
+    ConvBNLayer {outChannels, kernel, stride, pad, bnTimeConst} :
+    ReLU
+)
+
+#
+# Figure 9 from https://arxiv.org/pdf/1602.07261v2.pdf
+#
+InceptionA {numb1_0, numb1_1, numb1_2, numb2_0, numb2_1, numb3, numpool, bnTimeConst} = {
+    apply(x) = {
+        # 1x1 3x3 3x3 Convolution
+        branch_1 = Sequential (
+            ConvBNReLULayer {numb1_0, (1:1), (1:1), true, bnTimeConst} :
+            ConvBNReLULayer {numb1_1, (3:3), (1:1), true, bnTimeConst} :
+            ConvBNReLULayer {numb1_1, (3:3), (1:1), true, bnTimeConst}
+        ) (x)
+
+        # 1x1 3x3 Convolution
+        branch_2 = Sequential ( 
+            ConvBNReLULayer {numb2_0, (1:1), (1:1), true, bnTimeConst} :
+            ConvBNReLULayer {numb2_1, (3:3), (1:1), true, bnTimeConst}
+        ) (x)
+
+        # 1x1 Convolution
+        branch_3 = ConvBNReLULayer {numb3, (1:1), (1:1), true, bnTimeConst} (x)
+
+        # Avg Pooling
+        branch_pool = Sequential (
+            AveragePoolingLayer {(3:3), stride = (1:1), pad = true} :
+            ConvBNReLULayer {numpool, (1:1), (1:1), true, bnTimeConst}
+        ) (x)
+
+        # Concat
+        out = Splice ((branch_1:branch_2:branch_3:branch_pool), axis=3)
+    }.out
+}.apply
+
+#
+# Figure 7 & Table 1 from https://arxiv.org/pdf/1602.07261v2.pdf
+# Output: 16x16x1024
+#
+ReductionA {outChannels_k, outChannels_l, outChannels_m, outChannels_n, sub_pad, bnTimeConst} = {
+    apply(x) = {
+        # 1x1 3x3 3x3 Convolution
+        branch_1 = Sequential ( 
+            ConvBNReLULayer {outChannels_k, (1:1), (1:1), true, bnTimeConst} :
+            ConvBNReLULayer {outChannels_l, (3:3), (1:1), true, bnTimeConst} :
+            ConvBNReLULayer {outChannels_m, (3:3), (2:2), sub_pad, bnTimeConst}
+        ) (x)
+
+        # 3x3 Convolution
+        branch_2 = ConvBNReLULayer {outChannels_n, (3:3), (2:2), true, bnTimeConst}(x)
+
+        # 3x3 Max Pooling
+        branch_pool = MaxPoolingLayer {(3:3), stride = (2:2), pad = sub_pad} (x)
+
+        # Concat
+        out = Splice ((branch_1:branch_2:branch_pool), axis=3)
+    }.out
+}.apply
+
+#
+# Figure 5 from https://arxiv.org/pdf/1602.07261v2.pdf
+# Output: 16x16x1024
+#
+InceptionB {numb1_0, numb1_1, numb1_2, numb1_3, numb1_4, numb2_0, numb2_1, numb2_2, numb3, numpool, bnTimeConst} = {
+    apply(x) = {
+        # 1x1 1x7 7x1 1x7 7x1 Convolution
+        branch_1 = Sequential (
+            ConvBNReLULayer {numb1_0, (1:1), (1:1), true, bnTimeConst} :
+            ConvBNReLULayer {numb1_1, (1:7), (1:1), true, bnTimeConst} :
+            ConvBNReLULayer {numb1_2, (7:1), (1:1), true, bnTimeConst} :
+            ConvBNReLULayer {numb1_3, (1:7), (1:1), true, bnTimeConst} :
+            ConvBNReLULayer {numb1_4, (7:1), (1:1), true, bnTimeConst}
+        ) (x)
+
+        # 7x7 Convolution
+        branch_2 = Sequential ( 
+            ConvBNReLULayer {numb2_0, (1:1), (1:1), true, bnTimeConst} :
+            ConvBNReLULayer {numb2_1, (1:7), (1:1), true, bnTimeConst} :
+            ConvBNReLULayer {numb2_2, (1:7), (1:1), true, bnTimeConst}
+        ) (x)
+
+        # 1x1 Convolution
+        branch_3 = ConvBNReLULayer {numb3, (1:1), (1:1), true, bnTimeConst} (x)
+
+        # Avg Pooling 
+        branch_pool = Sequential ( 
+            AveragePoolingLayer {(3:3), stride = (1:1), pad = true} :
+            ConvBNReLULayer {numpool, (1:1), (1:1), true, bnTimeConst}
+        ) (x)
+
+        # Concat
+        out = Splice ((branch_1:branch_2:branch_3:branch_pool), axis=3)
+    }.out
+}.apply
+
+#
+# Figure 12 from https://arxiv.org/pdf/1602.07261v2.pdf
+# Output: 8x8x1536
+#
+ReductionB {numb1_0, numb1_1, numb1_2, numb2_0, numb2_1, numb3_0, numb3_1, sub_pad, bnTimeConst} = {
+    apply(x) = {
+        # 1x1 3x3 3x3 Convolution
+        branch_1 = Sequential (
+            ConvBNReLULayer {numb1_0, (1:1), (1:1), true, bnTimeConst} :
+            ConvBNReLULayer {numb1_1, (3:3), (1:1), true, bnTimeConst} :
+            ConvBNReLULayer {numb1_2, (3:3), (2:2), pad = sub_pad, bnTimeConst}
+        ) (x)
+
+        # 1x1 3x3 Convolution
+        branch_2 = Sequential ( 
+            ConvBNReLULayer {numb2_0, (1:1), (1:1), true, bnTimeConst} :
+            ConvBNReLULayer {numb2_1, (3:3), (2:2), pad = sub_pad, bnTimeConst}
+        ) (x)
+
+        # 1x1 3x3 Convolution
+        branch_3 = Sequential ( 
+            ConvBNReLULayer {numb3_0, (1:1), (1:1), true, bnTimeConst} :
+            ConvBNReLULayer {numb3_1, (3:3), (2:2), pad = sub_pad, bnTimeConst}
+        ) (x)
+
+        # Max Pooling
+        branch_pool = MaxPoolingLayer {(3:3), stride = (2:2), pad = sub_pad} (x)
+
+        # Concat
+        out = Splice ((branch_1:branch_2:branch_3:branch_pool), axis=3)
+    }.out
+}.apply
+
+#
+# Figure 6 from https://arxiv.org/pdf/1602.07261v2.pdf
+# Output: 8x8x1536
+#
+InceptionC {numb1_0, numb1_1, numb1_2, numb1_3, numb2_0, numb2_1, numb3, numpool, bnTimeConst} = {
+    apply(x) = {
+        # 1x3 & 3x1 Convolution
+        branch_1 = Sequential ( 
+            ConvBNReLULayer{numb1_0, (1:1), (1:1), true, bnTimeConst} :
+            ConvBNReLULayer{numb1_1, (1:3), (1:1), true, bnTimeConst} :
+            ConvBNReLULayer{numb1_2, (3:1), (1:1), true, bnTimeConst}
+        ) (x)
+
+        branch_1_1x3 = ConvBNReLULayer{numb1_3, (1:3), (1:1), true, bnTimeConst} (branch_1)        
+        branch_1_3x1 = ConvBNReLULayer{numb1_3, (3:1), (1:1), true, bnTimeConst} (branch_1)
+
+        # 1x3 & 3x1 Convolution
+        branch_2 = ConvBNReLULayer{numb2_0, (1:1), (1:1), true, bnTimeConst} (x)
+        branch_2_3x1 = ConvBNReLULayer{numb2_1, (3:1), (1:1), true, bnTimeConst} (branch_2)
+        branch_2_1x3 = ConvBNReLULayer{numb2_1, (1:3), (1:1), true, bnTimeConst} (branch_2)
+
+        # 1x1 Convolution
+        branch_3 = ConvBNReLULayer{numb3, (1:1), (1:1), true, bnTimeConst} (x)
+
+        # Avg Pooling
+        branch_pool = Sequential ( 
+            AveragePoolingLayer {(3:3), stride = (1:1), pad = true} :
+            ConvBNReLULayer{numpool, (1:1), (1:1), true, bnTimeConst}
+        ) (x)
+
+        # Concat
+        out = Splice((branch_1_1x3:branch_1_3x1:branch_2_3x1:branch_2_1x3:branch_3:branch_pool), axis=3)
+    }.out
+}.apply
